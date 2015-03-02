@@ -17,16 +17,24 @@ class Field(object):
         self.required = required
         self.unique = unique
         self.value = default
+        self.primary_key = primary_key
         self._to_python = list(to_python)
         self._to_mongo = list(to_mongo)
 
-    def _process(self, val, *args):
+    def __set__(self, instance, value):
+        self.value = value
+        self.changed = True
+
+    def __get__(self, instance, owner):
+        return self.value
+
+    def _process(self, value, *args):
         for fn in args:
             if type(fn) == type:
-                val = fn(val)
+                value = fn(value)
             else:
-                val = fn(val, self)
-        return val
+                value = fn(value, self)
+        return value
 
     def to_mongo(self, *args):
         args = list(args)
@@ -38,34 +46,26 @@ class Field(object):
         args.reverse()
         return self._process(self.value, *(args + self._to_python))
 
-    def set_value(self, val):
-        self.value = val
-        self.changed = True
 
-
-class StringField(Field):
+class TextField(Field):
 
     def to_mongo(self, *args):
-        def validate_str(val, obj):
-            if obj.required and not val.strip():
+        def validate(value, obj):
+            if obj.required and not value.strip():
                 raise ValueError('value can\'t be empty')
-            return val
-        return super(StringField, self).to_mongo(validate_str, unicode, *args)
+            return value
+        return super(TextField, self).to_mongo(validate, unicode, *args)
 
 
-class EmailField(StringField):
+class EmailField(TextField):
 
     def to_mongo(self, *args):
-        def validate_email(val, obj):
-            try:
-                atpos = val.index('@')
-                dotpos = val.rindex('.')
-            except ValueError:
-                raise ValueError('%s is not a valid email' % val)
-            if atpos < 1 or dotpos < atpos + 2 or dotpos + 2 >= len(val):
-                raise ValueError('%s is not a valid email' % val)
-            return val
-        return super(EmailField, self).to_mongo(validate_email, *args)
+        def validate(value, obj):
+            ixat = value.index('@')
+            ixdot = value.rindex('.')
+            assert(ixat > 1 and ixdot > ixat + 2 and ixdot + 2 < len(value))
+            return value
+        return super(EmailField, self).to_mongo(validate, *args)
 
 
 class BooleanField(Field):
@@ -102,7 +102,7 @@ class SetField(Field):
 
 
 class DictField(Field):
-    pass  # TODO: serialize
+    pass  # TODO: serialize? EmbebbedDocumentField?
 
 
 class JSONField(Field):
@@ -121,31 +121,31 @@ class DateTimeField(Field):
             try:
                 self.timezone = pytz.timezone(timezone)
             except:
-                raise ValueError('%s is not a valid timezone' % timezone)
+                raise ValueError('%s is not a valueid timezone' % timezone)
         super(DateTimeField, self).__init__(**kwargs)
 
     def to_mongo(self, *args):
 
-        def load_datetime(val, obj):
-            if not isinstance(val, datetime):
-                val = dateutil.parser.parse(val)
-            return val
+        def load(value, obj):
+            if not isinstance(value, datetime):
+                value = dateutil.parser.parse(value)
+            return value
 
-        def validate_timezone(val, obj):
-            if obj.timezone and val.tzinfo is None:
+        def validate_timezone(value, obj):
+            if obj.timezone and value.tzinfo is None:
                 raise ValueError('%s has no timezone while timezone is %s' %
-                                 (val, obj.timezone))
-            return val
+                                 (value, obj.timezone))
+            return value
 
-        def set_timezone(val, obj):
+        def set_timezone(value, obj):
             if obj.timezone:
-                val = val.replace(tzinfo=obj.timezone)
-            return val
+                value = value.replace(tzinfo=obj.timezone)
+            return value
 
         return super(DateTimeField, self).to_mongo(lambda x, _: x.isoformat(),
                                                    set_timezone,
                                                    validate_timezone,
-                                                   load_datetime,
+                                                   load,
                                                    *args)
 
     def to_python(self, *args):
@@ -156,14 +156,14 @@ class DateTimeField(Field):
 class DateField(Field):
 
     def to_mongo(self, *args):
-        def load_date(val, obj):
-            if isinstance(val, (date, datetime)):
-                val = val.date()
+        def load(value, obj):
+            if isinstance(value, (date, datetime)):
+                value = value.date()
             else:
-                val = dateutil.parser.parse(val).date()
-            return val
+                value = dateutil.parser.parse(value).date()
+            return value
         return super(DateField, self).to_mongo(
-            lambda x, _: x.isoformat(), load_date, *args)
+            lambda x, _: x.isoformat(), load, *args)
 
     def to_python(self, *args):
         return super(DateField, self).to_python(
@@ -174,17 +174,17 @@ class TimestampField(Field):
 
     def __init__(self, format=int, **kwargs):
         if format not in (float, int,):
-            raise ValueError('timestamp format %s not valid' % format)
+            raise ValueError('timestamp format %s not valueid' % format)
         self.format = format
         super(TimestampField, self).__init__(**kwargs)
 
     def to_mongo(self, *args):
-        def load_timstamp(val, obj):
-            if isinstance(val, datetime):
-                val = time.mktime(val.timetuple())
-            return val
+        def load(value, obj):
+            if isinstance(value, datetime):
+                value = time.mktime(value.timetuple())
+            return value
         return super(TimestampField, self).to_mongo(
-            self.format, load_timstamp, *args)
+            self.format, load, *args)
 
     def to_python(self, *args):
         return super(TimestampField, self).to_python(
@@ -195,22 +195,22 @@ class UUIDField(Field):
 
     def __init__(self, format='hex', unique=True, **kwargs):
         if format not in ('hex', 'int', 'urn', 'str',):
-            raise ValueError('UUID format %s not valid' % format)
+            raise ValueError('UUID format %s not valueid' % format)
         self.format = format
         super(UUIDField, self).__init__(unique, **kwargs)
 
     def to_mongo(self, *args):
-        def load_uuid(val, obj):
+        def load(value, obj):
             if obj.format == 'str':
-                val = val.__str__()
-            return getattr(val, obj.format)
-        return super(UUIDField, self).to_mongo(load_uuid, *args)
+                value = value.__str__()
+            return getattr(value, obj.format)
+        return super(UUIDField, self).to_mongo(load, *args)
 
     def to_python(self, *args):
-        def load_uuid(val, obj):
-            if isinstance(val, (str, unicode)):
-                val = uuid.UUID(val)
+        def load(value, obj):
+            if isinstance(value, (str, unicode)):
+                value = uuid.UUID(value)
             else:
-                val = uuid.UUID(int=val)
-            return val
-        return super(UUIDField, self).to_python(load_uuid, *args)
+                value = uuid.UUID(int=value)
+            return value
+        return super(UUIDField, self).to_python(load, *args)
