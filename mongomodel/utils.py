@@ -18,3 +18,16 @@ def json_encode(x):
 
 def json_decode(x):
     return json.loads(x)  # TODO
+
+
+def validate_update_query(model, update):  # TEMP
+    doc = model()
+    data = {}
+    for operator, kv in update.items():
+        mongo_kv = {}
+        for k, v in kv.items():
+            if k not in doc:
+                raise ValueError('%s is not a field' % k)
+            mongo_kv[k] = doc._meta.fields[k].to_mongo(v)
+        data[operator] = mongo_kv
+    return data
