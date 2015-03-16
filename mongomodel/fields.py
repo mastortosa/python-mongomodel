@@ -108,10 +108,16 @@ class BooleanField(Field):
         return super(BooleanField, self).to_mongo(value, bool, *args)
 
 
+BoolField = BooleanField
+
+
 class IntegerField(Field):
 
     def to_mongo(self, value, *args):
         return super(IntegerField, self).to_mongo(value, int, float, *args)
+
+
+IntField = IntegerField
 
 
 class FloatField(Field):
@@ -161,8 +167,10 @@ class DateTimeField(Field):
     def to_mongo(self, value, *args):
 
         def load(value, instance):
-            if not isinstance(value, datetime):
+            if isinstance(value, (str, unicode)):
                 value = dateutil.parser.parse(value)
+            elif isinstance(value, date):
+                value = datetime.combine(value, datetime.min.time())
             return value
 
         def validate_timezone(value, instance):
