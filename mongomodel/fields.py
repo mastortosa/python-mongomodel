@@ -66,6 +66,8 @@ class Field(object):
             return self._process(value, *(args + self._to_mongo))
 
     def to_python(self, value, *args):
+        if value is None:
+            return None
         args = list(args)
         # args.reverse()
         return self._process(value, *(args + self._to_python))
@@ -127,37 +129,6 @@ class FloatField(Field):
 
     def to_python(self, value, *args):
         return super(FloatField, self).to_python(value, float, *args)
-
-
-class ListField(Field):
-
-    # TODO: add max_lenght property.
-
-    def __init__(self, field, **kwargs):
-        if field == 'self':
-            field = ListField(field='??')  # TODO: think about this
-        elif not field or not isinstance(field, Field):
-            raise self.ConfigurationError('%s.field must be a Field instance.'
-                                          % self.__class__.__name__)
-        self.field = field
-        super(ListField, self).__init__(**kwargs)
-
-    def to_mongo(self, value, *args):
-        return super(ListField, self).to_mongo(
-            value, utils.list_to_mongo, *args)
-
-    def to_python(self, value, *args):
-        return super(ListField, self).to_python(
-            value, utils.list_to_python, *args)
-
-
-class SetField(ListField):
-
-    def to_mongo(self, value, *args):
-        return super(SetField, self).to_mongo(value, set, list, *args)
-
-    def to_python(self, value, *args):
-        return super(SetField, self).to_python(value, set, *args)
 
 
 class JSONField(Field):
@@ -242,3 +213,50 @@ class ObjectIdField(Field):
     def to_python(self, value, *args):
         return super(ObjectIdField, self).to_python(
             value, utils.load_objectid, *args)
+
+
+class ListField(Field):
+
+    # TODO: add max_lenght property.
+
+    def __init__(self, field, **kwargs):
+        if field == 'self':
+            field = ListField(field='??')  # TODO: think about this
+        elif not field or not isinstance(field, Field):
+            raise self.ConfigurationError('%s.field must be a Field instance.'
+                                          % self.__class__.__name__)
+        self.field = field
+        super(ListField, self).__init__(**kwargs)
+
+    def to_mongo(self, value, *args):
+        return super(ListField, self).to_mongo(
+            value, utils.list_to_mongo, *args)
+
+    def to_python(self, value, *args):
+        return super(ListField, self).to_python(
+            value, utils.list_to_python, *args)
+
+
+class SetField(ListField):
+
+    def to_mongo(self, value, *args):
+        return super(SetField, self).to_mongo(value, set, list, *args)
+
+    def to_python(self, value, *args):
+        return super(SetField, self).to_python(value, set, *args)
+
+
+class EmbeddedDocumentField(Field):
+
+    def __init__(self, document_class, **kwargs):
+        self.document = document_class()  # TODO: validate
+        super(EmbeddedDocumentField, self).__init__(**kwargs)
+
+    def __set__(self, instance, value):
+        if instance is not None:
+            self.document = value
+            instance._data[self.name] = self.document._data
+            instance._changed = True
+
+    def to_python(self, value=None, *args):
+        return self.document.to_python()
