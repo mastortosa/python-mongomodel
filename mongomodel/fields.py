@@ -252,6 +252,9 @@ class EmbeddedDocumentField(Field):
         self.document = document_class()  # TODO: validate
         super(EmbeddedDocumentField, self).__init__(**kwargs)
 
+    def __get__(self, instance, owner):
+        return self.document
+
     def __set__(self, instance, value):
         if instance is not None:
             self.document = value
