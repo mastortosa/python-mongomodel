@@ -249,6 +249,7 @@ class SetField(ListField):
 class EmbeddedDocumentField(Field):
 
     def __init__(self, document_class, **kwargs):
+        self._document_class = document_class
         self.document = document_class()  # TODO: validate
         super(EmbeddedDocumentField, self).__init__(**kwargs)
 
@@ -257,9 +258,20 @@ class EmbeddedDocumentField(Field):
 
     def __set__(self, instance, value):
         if instance is not None:
-            self.document = value
+            if isinstance(value, self._document_class):
+                self.document = value
+            elif isinstance(value, dict):
+                self.document = self._document_class(**value)
+            else:
+                raise self.ValidationError(
+                    'Can\'t set %s as %s' % (type(value),
+                                             self._document_class),
+                    instance=instance)
             instance._data[self.name] = self.document._data
             instance._changed = True
+
+    def to_mongo(self, value=None, *args):
+        return self.document.to_mongo()
 
     def to_python(self, value=None, *args):
         return self.document.to_python()

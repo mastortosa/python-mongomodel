@@ -24,7 +24,11 @@ def json_decode(x):
     return json.loads(x)  # TODO
 
 
-def validate_update_query(model, update):  # TEMP
+def validate_update_query(model, update):
+    # TODO: check if is required to $unset.
+    # TODO: recursive in EmbeddedDocumentField.
+    # TODO: check for key.subkey
+    # operation = { name : { ( key | key.sub) : ( val | operation ) }, ... }
     doc = model()
     data = {}
     for operator, kv in update.items():
