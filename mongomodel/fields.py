@@ -220,9 +220,7 @@ class ListField(Field):
     # TODO: add max_lenght property.
 
     def __init__(self, field, **kwargs):
-        if field == 'self':
-            field = ListField(field='??')  # TODO: think about this
-        elif not field or not isinstance(field, Field):
+        if not field or not isinstance(field, Field):
             raise self.ConfigurationError('%s.field must be a Field instance.'
                                           % self.__class__.__name__)
         self.field = field
