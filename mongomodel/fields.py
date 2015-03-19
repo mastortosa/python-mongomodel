@@ -21,6 +21,8 @@ class FieldConfigurationError(Exception):
 class Field(object):
     name = None
 
+    _update_operators = ('$setOnInsert', '$set', '$unset',)
+
     ValidationError = FieldValidationError
     ConfigurationError = FieldConfigurationError
 
@@ -53,7 +55,7 @@ class Field(object):
             raise self.ValidationError(instance=self)
         return value
 
-    def to_mongo(self, value, *args):
+    def to_mongo(self, value, *args, **kwargs):
         if value is None:
             if self.required and not self.auto:
                 raise self.ValidationError('Value can\'t be none if required',
@@ -61,30 +63,47 @@ class Field(object):
             else:
                 return None
         else:
-            args = list(args)
-            # args.reverse()
-            return self._process(value, *(args + self._to_mongo))
+            if kwargs.get('custom', True):
+                args = list(args) + self._to_mongo
+            return self._process(value, *args)
 
-    def to_python(self, value, *args):
+    def to_python(self, value, *args, **kwargs):
         if value is None:
             return None
-        args = list(args)
-        # args.reverse()
-        return self._process(value, *(args + self._to_python))
+        if kwargs.get('custom', True):
+            args = list(args) + self._to_python
+        return self._process(value, *args)
+
+    def validate_update_operator(self, operator, value):
+        """
+        Checks if the update operator and value is correct, raise
+        Field.ValidationError if not.
+        """
+        # error = self.ValidationError(
+        #     'Invalid update operator %s with value %s.' % (operator, value),
+        #     instance=self)
+        if operator not in self._update_operators:
+            raise self.ValidationError(
+                'Update operator %s not allowed' % operator,
+                instance=self)
+        if operator == '$unset' and self.required:
+            raise self.ValidationError(
+                '$unset operator not allowed in required fields.',
+                instance=self)
 
 
 class TextField(Field):
 
-    def to_mongo(self, value, *args):
+    def to_mongo(self, value, *args, **kwargs):
         return super(TextField, self).to_mongo(
-            value, unicode, utils.validate_text, *args)
+            value, unicode, utils.validate_text, *args, **kwargs)
 
 
 class EmailField(TextField):
 
-    def to_mongo(self, value, *args):
+    def to_mongo(self, value, *args, **kwargs):
         return super(EmailField, self).to_mongo(
-            value, utils.validate_email, *args)
+            value, utils.validate_email, *args, **kwargs)
 
 
 class URLField(TextField):
@@ -93,52 +112,61 @@ class URLField(TextField):
         self.https = https
         super(URLField, self).__init__(**kwargs)
 
-    def to_mongo(self, value, *args):
+    def to_mongo(self, value, *args, **kwargs):
         return super(URLField, self).to_mongo(
-            value, utils.clean_url, utils.validate_url, *args)
+            value, utils.clean_url, utils.validate_url, *args, **kwargs)
 
 
 class BooleanField(Field):
 
-    def to_mongo(self, value, *args):
-        return super(BooleanField, self).to_mongo(value, bool, *args)
+    def to_mongo(self, value, *args, **kwargs):
+        return super(BooleanField, self).to_mongo(value, bool, *args, **kwargs)
 
-    def to_python(self, value, *args):
-        return super(BooleanField, self).to_python(value, bool, *args)
+    def to_python(self, value, *args, **kwargs):
+        return super(BooleanField, self).to_python(
+            value, bool, *args, **kwargs)
 
 
 BoolField = BooleanField
 
 
 class IntegerField(Field):
+    _update_operators = ('$inc', '$mul', '$setOnInsert', '$set', '$unset',
+                         '$min', '$max', '$bit',)
 
-    def to_mongo(self, value, *args):
-        return super(IntegerField, self).to_mongo(value, float, int, *args)
+    def to_mongo(self, value, *args, **kwargs):
+        return super(IntegerField, self).to_mongo(
+            value, float, int, *args, **kwargs)
 
-    def to_python(self, value, *args):
-        return super(IntegerField, self).to_python(value, float, int, *args)
+    def to_python(self, value, *args, **kwargs):
+        return super(IntegerField, self).to_python(
+            value, float, int, *args, **kwargs)
 
 
 IntField = IntegerField
 
 
 class FloatField(Field):
+    _update_operators = ('$inc', '$mul', '$setOnInsert', '$set', '$unset',
+                         '$min', '$max',)
 
-    def to_mongo(self, value, *args):
-        return super(FloatField, self).to_mongo(value, float, *args)
+    def to_mongo(self, value, *args, **kwargs):
+        return super(FloatField, self).to_mongo(value, float, *args, **kwargs)
 
-    def to_python(self, value, *args):
-        return super(FloatField, self).to_python(value, float, *args)
+    def to_python(self, value, *args, **kwargs):
+        return super(FloatField, self).to_python(value, float, *args, **kwargs)
 
 
 class JSONField(Field):
 
-    def to_mongo(self, value, *args):
+    def to_mongo(self, value, *args, **kwargs):
         return super(JSONField, self).to_mongo(
-            value, lambda x, _: utils.encode_json(x), *args)
+            value, lambda x, _: utils.encode_json(x), *args, **kwargs)
 
 
 class DateTimeField(Field):
+    _update_operators = ('$setOnInsert', '$set', '$min', '$max',
+                         '$currentDate',)
 
     def __init__(self, timezone=None, **kwargs):
         if timezone is None or isinstance(timezone, pytz.tzinfo.DstTzInfo):
@@ -151,27 +179,39 @@ class DateTimeField(Field):
                                               % timezone)
         super(DateTimeField, self).__init__(**kwargs)
 
-    def to_mongo(self, value, *args):
+    def to_mongo(self, value, *args, **kwargs):
         return super(DateTimeField, self).to_mongo(
             value, utils.load_datetime, utils.validate_timezone,
-            utils.set_timezone, utils.isodate, *args)
+            utils.set_timezone, utils.isodate, *args, **kwargs)
 
-    def to_python(self, value, *args):
+    def to_python(self, value, *args, **kwargs):
         return super(DateTimeField, self).to_python(
-            value, utils.load_datetime, *args)
+            value, utils.load_datetime, *args, **kwargs)
+
+    def validate_update_operator(self, operator, value):
+        super(DateTimeField, self).validate_update_operator(operator, value)
+        if operator == '$currentDate' and value not in (True,
+                                                        {'$type': 'date'}):
+            raise self.ValidationError(
+                'DateTimeField $currentDate operator requires field value as '
+                'True or {"$type": "date"}',
+                instance=self)
 
 
 class DateField(Field):
 
-    def to_mongo(self, value, *args):
+    def to_mongo(self, value, *args, **kwargs):
         return super(DateField, self).to_mongo(
-            value, utils.load_date, utils.isodate, *args)
+            value, utils.load_date, utils.isodate, *args, **kwargs)
 
-    def to_python(self, value, *args):
-        return super(DateField, self).to_python(value, utils.load_date, *args)
+    def to_python(self, value, *args, **kwargs):
+        return super(DateField, self).to_python(
+            value, utils.load_date, *args, **kwargs)
 
 
 class TimestampField(Field):
+    _update_operators = ('$setOnInsert', '$set', '$min', '$max',
+                         '$currentDate',)
 
     def __init__(self, format=int, **kwargs):
         if format not in (float, int,):
@@ -180,13 +220,21 @@ class TimestampField(Field):
         self.format = format
         super(TimestampField, self).__init__(**kwargs)
 
-    def to_mongo(self, value, *args):
+    def to_mongo(self, value, *args, **kwargs):
         return super(TimestampField, self).to_mongo(
-            value, self.load_timestamp, self.format, *args)
+            value, self.load_timestamp, self.format, *args, **kwargs)
 
-    def to_python(self, value, *args):
+    def to_python(self, value, *args, **kwargs):
         return super(TimestampField, self).to_python(
-            value, utils.timestamp_to_datetime, *args)
+            value, utils.timestamp_to_datetime, *args, **kwargs)
+
+    def validate_update_operator(self, operator, value):
+        super(TimestampField, self).validate_update_operator(operator, value)
+        if operator == '$currentDate' and value != {'$type': 'timestamp'}:
+            raise self.ValidationError(
+                'TimestampField $currentDate operator requires field value as '
+                '{"$type": "timestamp"}',
+                instance=self)
 
 
 class UUIDField(Field):
@@ -197,25 +245,28 @@ class UUIDField(Field):
         self.format = format
         super(UUIDField, self).__init__(unique, **kwargs)
 
-    def to_mongo(self, value, *args):
-        return super(UUIDField, self).to_mongo(value, utils.format_uuid, *args)
+    def to_mongo(self, value, *args, **kwargs):
+        return super(UUIDField, self).to_mongo(
+            value, utils.format_uuid, *args, **kwargs)
 
-    def to_python(self, value, *args):
-        return super(UUIDField, self).to_python(value, utils.load_uuid, *args)
+    def to_python(self, value, *args, **kwargs):
+        return super(UUIDField, self).to_python(
+            value, utils.load_uuid, *args, **kwargs)
 
 
 class ObjectIdField(Field):
 
-    def to_mongo(self, value, *args):
+    def to_mongo(self, value, *args, **kwargs):
         return super(ObjectIdField, self).to_mongo(
-            value, utils.load_objectid, *args)
+            value, utils.load_objectid, *args, **kwargs)
 
-    def to_python(self, value, *args):
+    def to_python(self, value, *args, **kwargs):
         return super(ObjectIdField, self).to_python(
-            value, utils.load_objectid, *args)
+            value, utils.load_objectid, *args, **kwargs)
 
 
 class ListField(Field):
+    _update_operators = ()  # TODO
 
     # TODO: add max_lenght property.
 
@@ -226,28 +277,28 @@ class ListField(Field):
         self.field = field
         super(ListField, self).__init__(**kwargs)
 
-    def to_mongo(self, value, *args):
+    def to_mongo(self, value, *args, **kwargs):
         return super(ListField, self).to_mongo(
-            value, utils.list_to_mongo, *args)
+            value, utils.list_to_mongo, *args, **kwargs)
 
-    def to_python(self, value, *args):
+    def to_python(self, value, *args, **kwargs):
         return super(ListField, self).to_python(
-            value, utils.list_to_python, *args)
+            value, utils.list_to_python, *args, **kwargs)
 
 
 class SetField(ListField):
 
-    def to_mongo(self, value, *args):
-        return super(SetField, self).to_mongo(value, set, list, *args)
+    def to_mongo(self, value, *args, **kwargs):
+        return super(SetField, self).to_mongo(
+            value, set, list, *args, **kwargs)
 
-    def to_python(self, value, *args):
-        return super(SetField, self).to_python(value, set, *args)
+    def to_python(self, value, *args, **kwargs):
+        return super(SetField, self).to_python(value, set, *args, **kwargs)
 
 
 class EmbeddedDocumentField(Field):
 
     def __init__(self, document_class, **kwargs):
-        self._document_class = document_class
         self.document = document_class()  # TODO: validate
         super(EmbeddedDocumentField, self).__init__(**kwargs)
 
@@ -256,20 +307,20 @@ class EmbeddedDocumentField(Field):
 
     def __set__(self, instance, value):
         if instance is not None:
-            if isinstance(value, self._document_class):
+            if isinstance(value, self.document.__class__):
                 self.document = value
             elif isinstance(value, dict):
-                self.document = self._document_class(**value)
+                self.document = self.document.__class__(**value)
             else:
                 raise self.ValidationError(
                     'Can\'t set %s as %s' % (type(value),
-                                             self._document_class),
+                                             self.document.__class__),
                     instance=instance)
             instance._data[self.name] = self.document._data
             instance._changed = True
 
-    def to_mongo(self, value=None, *args):
+    def to_mongo(self, value=None, *args, **kwargs):
         return self.document.to_mongo()
 
-    def to_python(self, value=None, *args):
+    def to_python(self, value=None, *args, **kwargs):
         return self.document.to_python()

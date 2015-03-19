@@ -24,23 +24,6 @@ def json_decode(x):
     return json.loads(x)  # TODO
 
 
-def validate_update_query(model, update):
-    # TODO: check if is required to $unset.
-    # TODO: recursive in EmbeddedDocumentField.
-    # TODO: check for key.subkey
-    # operation = { name : { ( key | key.sub) : ( val | operation ) }, ... }
-    doc = model()
-    data = {}
-    for operator, kv in update.items():
-        mongo_kv = {}
-        for k, v in kv.items():
-            if k not in doc:
-                raise ValueError('%s is not a field' % k)
-            mongo_kv[k] = doc._meta.fields[k].to_mongo(v)
-        data[operator] = mongo_kv
-    return data
-
-
 # Functions to use in Field.to_mongo and Field.to_python
 
 def validate_text(value, instance):

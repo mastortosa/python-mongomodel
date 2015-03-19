@@ -1,5 +1,4 @@
 from mongomodel import fields
-from mongomodel.utils import validate_update_query
 from mongomodel.db import Client
 
 
@@ -162,9 +161,56 @@ class Document(object):
     def as_python(self):
         self._data = self.to_python()
 
+    @classmethod
+    def validate_update_query(cls, update):
+        # Although Document has no db operation it must provide an update
+        # validation since a document may be part of a model to update.
+        data = {}
+        for operator, kv in update.items():
+            mongo_kv = {}
+            for k, v in kv.items():
+                k_split = k.split('.')
+                if len(k_split) > 1:
+                    k_split.reverse()
+                    for k in k_split[:-1]:
+                        v = {k: v}
+                    k = k_split[-1]
+                try:
+                    field = cls._meta.fields[k]
+                except KeyError:
+                    raise ValueError('%s is not a field' % k)
+                if isinstance(field, fields.ListField):
+                    pass  # TODO
+                elif isinstance(field, fields.EmbeddedDocumentField):
+                    v = field.document.validate_update_query({operator: v})
+                    if operator not in ('$unset', '$currentDate'):
+                        v = v[operator]
+                    mongo_kv[k] = v
+                else:
+                    field.validate_update_operator(operator, v)
+                    # Provide a proper mongo value. Do not call custom to_mongo
+                    # functions since it may have conflicts, eg:
+                    # If a model has a field to store natural numbers:
+                    # nat = fields.IntField(to_mongo=[validate_gt_zero])
+                    # This operator would be wrong according to the custom
+                    # validation:
+                    # {'$inc': {'nat': -3}}.
+                    # Sometimes the result in the document may be a valid or an
+                    # invalid model, following the same example,
+                    # doc: {'nat': 5} -> update -> doc: {'nat': 2}  # Valid.
+                    # doc: {'nat': 2} -> update -> doc: {'nat': -1}  # Invalid.
+                    # To avoid this, use Model.update() with replace=True or
+                    # Model.save().
+                    if operator not in ('$unset', '$currentDate'):
+                        v = field.to_mongo(v, custom=False)
+                    mongo_kv[k] = v
+            data[operator] = mongo_kv
+        return data
+
 
 class Model(Document):
 
+    # TODO: specify fields to return in a read query (take into account when saving the document, since it will be updated with replace, so, if the document is not complete, it must be read entirely before updating it (or use $set)).
     # TODO: check Cursor.__init__ and Cursor.find for pymongo 3.x
     # TODO: to_mongo() for fields in Model.create, Model.update, Model.delete
     # TODO: rethink Model._changed.
@@ -232,7 +278,7 @@ class Model(Document):
         """
         collection = cls.get_collection()
         if multi:
-            data = validate_update_query(update)
+            data = cls.validate_update_query(update)
             return collection.update_many(filter, data, upsert)
         elif replace:
             # New document from update. Get data from a new model instance.
@@ -241,7 +287,7 @@ class Model(Document):
             method = collection.find_one_and_replace
         else:
             # Some attributes of the document will be updated.
-            data = validate_update_query(update)
+            data = cls.validate_update_query(update)
             method = collection.find_one_and_update
         doc = method(filter, data, upsert=upsert, return_document=True)
         doc = cls(**doc)
