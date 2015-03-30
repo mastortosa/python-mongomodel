@@ -5,6 +5,7 @@ import uuid
 from datetime import datetime, date
 
 from bson.objectid import ObjectId
+from bson.binary import Binary
 import dateutil.parser
 
 
@@ -146,3 +147,7 @@ def load_objectid(value, instance):
     if isinstance(value, (str, unicode)):
         value = ObjectId(value)
     return value
+
+
+def load_binary(value, instance):
+    return Binary(value.read())

@@ -1,4 +1,5 @@
 import re
+import urllib
 
 from mongomodel import fields
 from mongomodel.db import Client
@@ -12,7 +13,15 @@ def connect(db_name, **kwargs):
     if db_name in _connections:
         db = _connections[db_name][db_name]
     else:
-        _connections[db_name] = Client(**kwargs)
+        host = kwargs.get('host', 'localhost')
+        if 'port' in kwargs:
+            host = '%s:%s' % (host, kwargs['port'])
+        if 'username' in kwargs:
+            host = 'mongodb://%s:%s@%s' % (
+                kwargs['username'],
+                urllib.quote_plus(kwargs['password']),
+                host)
+        _connections[db_name] = Client(host)
         db = _connections[db_name][db_name]
     return db
 
