@@ -332,8 +332,10 @@ class Model(Document):
                 doc.as_python()
             return doc_list
         else:
+            # Save and get data in the same way as self.save.
             doc = cls(**kwargs)
-            data = doc.to_mongo()
+            doc.as_mongo()
+            data = doc.drop_none()
             result = collection.insert_one(data)
             doc._id = result.inserted_id  # ??: for all Field.auto?
             doc._changed = False
@@ -412,6 +414,8 @@ class Model(Document):
 
     def save(self):
         collection = self._get_collection()
+        # Save the cleaned and validated data as mongo values, no filter out.
+        # Use filtered out date to the query
         self.as_mongo()
         data = self.drop_none()
         if self._id:  # Update.

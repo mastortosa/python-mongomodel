@@ -43,6 +43,7 @@ def load_choice(value, instance):
         choices = instance.choices
         if isinstance(choices, (tuple, list)):
             choices = dict(choices)
+        # Get the value in the proper field format.
         if value in choices.values():
             value = next(k for k, v in choices.items() if v == value)
     return value
