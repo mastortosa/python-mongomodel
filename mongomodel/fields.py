@@ -6,9 +6,9 @@ from mongomodel import utils
 class FieldValidationError(Exception):
 
     def __init__(self, message='', instance=None):
-        self.field = instance.name
         if not message:
             message = 'Not a valid %s' % instance.__class__.__name__
+        self.field = getattr(instance, 'name', None)
         if self.field:
             message = '[%s] %s' % (self.field, message)
         super(FieldValidationError, self).__init__(message)
@@ -384,11 +384,18 @@ class EmbeddedDocumentField(Field):
             instance._changed = True
 
     def to_mongo(self, value=None, *args, **kwargs):
-        doc = value or self.document
+        # TODO: not happy with this.
+        if isinstance(value, self.document.__class__):
+            doc = value
+        else:
+            doc = self.document
         return doc.to_mongo()
 
     def to_python(self, value=None, *args, **kwargs):
-        doc = value or self.document
+        if isinstance(value, self.document.__class__):
+            doc = value
+        else:
+            doc = self.document
         return doc.to_python()
 
 
