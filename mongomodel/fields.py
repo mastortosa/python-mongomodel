@@ -26,11 +26,12 @@ class Field(object):
     ValidationError = FieldValidationError
     ConfigurationError = FieldConfigurationError
 
-    def __init__(self, default=None, required=True, auto=False, to_python=[],
-                 to_mongo=[]):
+    def __init__(self, default=None, required=True, auto=False, unique=False,
+                 to_python=[], to_mongo=[], **kwargs):
         self.required = required
         self.auto = auto
         self.default = default
+        self.unique = unique
         self._to_python = list(to_python)
         self._to_mongo = list(to_mongo)
 
@@ -51,6 +52,8 @@ class Field(object):
                     value = fn(value)
                 else:
                     value = fn(value, self)
+        except self.ValidationError as e:
+            raise e
         except:
             raise self.ValidationError(instance=self)
         return value
@@ -92,6 +95,26 @@ class Field(object):
                 instance=self)
 
 
+class ChoicesMixin(object):
+
+    def __init__(self, *args, **kwargs):
+        choices = kwargs.get('choices', ())
+        if choices:
+            if not isinstance(choices, (dict, list, tuple)):
+                raise self.ConfigurationError(
+                    'choices argument must be an instance of dict|list|tuple')
+        self.choices = choices
+        super(ChoicesMixin, self).__init__(*args, **kwargs)
+
+    def to_mongo(self, value, *args, **kwargs):
+        return super(ChoicesMixin, self).to_mongo(
+            value, utils.load_choice, utils.validate_choices, *args, **kwargs)
+
+    def to_python(self, value, *args, **kwargs):
+        return super(ChoicesMixin, self).to_python(
+            value, utils.validate_choices, *args, **kwargs)
+
+
 class TextField(Field):
 
     def to_mongo(self, value, *args, **kwargs):
@@ -130,7 +153,7 @@ class BooleanField(Field):
 BoolField = BooleanField
 
 
-class IntegerField(Field):
+class IntegerField(ChoicesMixin, Field):
     _update_operators = ('$inc', '$mul', '$setOnInsert', '$set', '$unset',
                          '$min', '$max', '$bit',)
 
@@ -266,9 +289,10 @@ class ObjectIdField(Field):
 
 
 class ListField(Field):
-    _update_operators = ()  # TODO
-
-    # TODO: add max_lenght property.
+    _update_operators = ('$setOnInsert', '$set', '$unset', '$', '$addToSet',
+                         '$pop', '$pullAll', '$pull', '$pushAll', '$push',)
+    _update_modifiers = ('$each', '$slice', '$sort', '$position',)
+    _projection = None
 
     def __init__(self, field, **kwargs):
         if not field or not isinstance(field, Field):
@@ -285,6 +309,42 @@ class ListField(Field):
         return super(ListField, self).to_python(
             value, utils.list_to_python, *args, **kwargs)
 
+    def validate_update_operator(self, operator, value):
+        # Possible cases:
+        # 1) { operator: { name : value | [value] } }
+        # 2) { operator: { name.$ : value | [value] } }
+        # 3) { operator: { name : { modifier : value | [value] } } }
+        # 4) { operator: { name.$.xfield : xvalue } }
+        #
+        # After convert from short to extended query (in model):
+        # 1) { operator: { name : value | [value] } }
+        # 2) { operator: { name : { $ : value | [value] } }
+        # 3) { operator: { name : { modifier : value | [value] } } }
+        # 4) { operator: { name : { $ : { xfield : xvalue } } }
+        #
+        # Validation:
+        # 1, 2, 3) value must be an instance of self.field
+        # 3) modifier must be in self._update_modifiers
+        # 4) self.field must be an instance of EmbeddedDocumentField
+        # 4) xfield must be in self.field._meta.fields
+        # 4) xvalue must be an instance of self.field
+        # 1) value | [value]
+        # 2) { $ : value | [value] }
+        # 3) { modifier : value | [value] }
+        # 4) { $ : { xfield : xvalue } }
+
+        super(ListField, self).validate_update_operator(operator, value)
+        if isinstance(value, self.field.__class__):
+            # 1) Validate value.
+            self.field.validate_update_operator(operator, value)
+        elif isinstance(value, list):
+            # 1) Validate each value in list.
+            for i in value:
+                self.field.validate_update_operator(operator, i)
+        elif isinstance(value, dict):
+            # 2, 3, 4)
+            pass  # TODO
+
 
 class SetField(ListField):
 
@@ -297,6 +357,7 @@ class SetField(ListField):
 
 
 class EmbeddedDocumentField(Field):
+    _projection = None
 
     def __init__(self, document_class, **kwargs):
         self.document = document_class()  # TODO: validate

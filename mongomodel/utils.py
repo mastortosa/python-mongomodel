@@ -26,6 +26,27 @@ def json_decode(x):
 
 # Functions to use in Field.to_mongo and Field.to_python
 
+def validate_choices(value, instance):
+    if instance.choices:
+        choices = instance.choices
+        if isinstance(choices, (tuple, list)):
+            choices = dict(choices)
+        if value not in choices.keys():
+            raise instance.ValidationError('Value not in field choices',
+                                           instance=instance)
+    return value
+
+
+def load_choice(value, instance):
+    if instance.choices:
+        choices = instance.choices
+        if isinstance(choices, (tuple, list)):
+            choices = dict(choices)
+        if value in choices.values():
+            value = next(k for k, v in choices.items() if v == value)
+    return value
+
+
 def validate_text(value, instance):
     if instance.required and not value.strip():
         raise instance.ValidationError('Value can\'t be empty',

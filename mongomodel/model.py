@@ -1,3 +1,5 @@
+import re
+
 from mongomodel import fields
 from mongomodel.db import Client
 
@@ -46,20 +48,21 @@ class ModelMeta(type):
 
         # Get database.
         if not meta._embedded and not getattr(meta, 'abstract', False):
-            try:
-                meta.database = next((i.database for i in super_meta_list
-                                      if hasattr(i, 'database')),
-                                     meta.database)
-                meta.database_attrs = next((i.database_attrs
-                                            for i in super_meta_list
-                                            if hasattr(i, 'database_attrs')),
-                                           {})
-            except AttributeError:
+            meta.database = next((i.database for i in super_meta_list
+                                  if hasattr(i, 'database')),
+                                 getattr(meta, 'database', None))
+            if not meta.database:
                 raise ValueError('database not found in model Meta.')
 
-            # Get collection.
-            meta.collection = getattr(
-                meta, 'collection', ('%ss' % name).lower())
+            meta.database_attrs = next((i.database_attrs
+                                        for i in super_meta_list
+                                        if hasattr(i, 'database_attrs')),
+                                       {})
+
+            # Get collection or create from model name.
+            if not hasattr(meta, 'collection'):
+                pattern, replace = r'([a-z0-9])([A-Z])', r'\1_\2'
+                meta.collection = re.sub(pattern, replace, name + 's').lower()
 
             # Deal with collection connection in the meta to reduce attemps to
             # get the connection instance. Eg:
@@ -87,8 +90,10 @@ class Document(object):
     """
 
     __metaclass__ = ModelMeta
-
     _changed = False
+
+    # A subset of self._meta.fields.keys() or None (all fields).
+    _projection = None
 
     class Meta:
         _embedded = True
@@ -100,20 +105,33 @@ class Document(object):
         # Field.to_python(). When the model is created directly from data
         # retrieved from the database, _data will contain, again, the values as
         # declared in Field.to_python().
-        self._data = dict((k, v.default) for k, v in self._meta.fields.items())
+        projection = kwargs.get('_projection')
+        if projection and not isinstance(projection, (list, tuple)):
+            raise ValueError('_fields must be None|list|tuple')
+            # TODO: validate subfields.
+        self._projection = projection
 
-        if set(kwargs.keys()).issubset(self._meta.fields.keys()):
-            for k, v in kwargs.items():
-                setattr(self, k, v)
-        else:
-            raise ValueError('One or more fields are not valid.')
+        try:
+            self._data = dict((i, self._meta.fields[i].default)
+                              for i in self._get_field_names())
+        except KeyError:
+            raise ValueError('%s is not a valid field' % i)
+
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+
+        # if set(kwargs.keys()).issubset(self._meta.fields.keys()):
+        #     for k, v in kwargs.items():
+        #         setattr(self, k, v)
+        # else:
+        #     raise ValueError('One or more fields are not valid.')
 
     def __setitem__(self, attr, value):
         """
         Assign attribute assignment to item assignment to support cursor
         decoding (bson.decode_all).
         """
-        if attr in self._meta.fields:
+        if attr in self._get_field_names():
             # Value will be loaded from mongodb, python conversion will be
             # needed and also to set as not changed since item assigment will
             # be used only as db reads.
@@ -137,29 +155,72 @@ class Document(object):
         return item in self._meta.fields
 
     def __eq__(self, other):
-        return self.to_python() == other.to_python()
+        return self.to_mongo().to_python() == other.to_mongo().to_python()
 
     def __ne__(self, other):
         return not self.__eq__(other)
 
+    def _get_field_names(self):
+        if self._projection is None:
+            return self._meta.fields.keys()
+        else:
+            return self._projection
+
+    def drop_none(self, data=None):
+        data = data or self._data
+        output = {}
+        for k, v in data.items():
+            if isinstance(v, dict):
+                v = self.drop_none(v)
+            if v is not None:
+                output[k] = v
+        return output
+
+    def to_json(self, fields=None):
+        pass  # TODO: use utils.encode_json(self.to_python())
+
     def to_mongo(self, drop_none=True):
+        """
+        Return dict data with the Model._data as a mongodb valid format and
+        validated using all fields.to_mongo.
+        Call to_mongo with self._data loaded from database, from constructor or
+        set by attribute.
+        """
+        # doc = {}
+        # for name, field in self._meta.fields.items():
+        #     value = self._data[name]
+        #     value = field.to_mongo(value)
+        #     if value is None and drop_none:
+        #         continue
+        #     doc[name] = value
+        # return doc
         doc = {}
-        for name, field in self._meta.fields.items():
-            value = self._data[name]
-            if field.auto and value is None:
-                continue
-            value = field.to_mongo(value)
+        for name in self._get_field_names():
+            field = self._meta.fields[name]
+            value = field.to_mongo(self._data[name])
             if value is None and drop_none:
                 continue
             doc[name] = value
         return doc
 
     def to_python(self):
-        return dict((k, v.to_python(self._data[k]))
-                    for k, v in self._meta.fields.items())
+        """
+        Return dict data with the Model._data as a python valid object and
+        validated using all fields.to_python.
+        Call to_python always when self._data was previously read from the
+        database or converted using Model.as_mongo(), never from data
+        introduced in the constructor or set by attribute.
+        """
+        # return dict((k, v.to_python(self._data[k]))
+        #             for k, v in self._meta.fields.items())
+        return dict((i, self._meta.fields[i].to_python(self._data[i]))
+                    for i in self._get_field_names())
 
     def as_python(self):
         self._data = self.to_python()
+
+    def as_mongo(self):
+        self._data = self.to_mongo(drop_none=False)
 
     @classmethod
     def validate_update_query(cls, update):
@@ -171,6 +232,9 @@ class Document(object):
             for k, v in kv.items():
                 k_split = k.split('.')
                 if len(k_split) > 1:
+                    # Convert from compacted to extended query. Eg:
+                    # {k, v}; k ='key.subkey.num'; v = 2
+                    # {k, v}; k ='key'; v={'subkey': {'num': 2}})}
                     k_split.reverse()
                     for k in k_split[:-1]:
                         v = {k: v}
@@ -180,12 +244,14 @@ class Document(object):
                 except KeyError:
                     raise ValueError('%s is not a field' % k)
                 if isinstance(field, fields.ListField):
-                    pass  # TODO
+                    field.validate_update_operator(operator, v)
+                    # TODO: call to_mongo with custom=False according to the
+                    #       field.validate_update_operator comments.
+                    # ??: convert from extended query to compacted query?
                 elif isinstance(field, fields.EmbeddedDocumentField):
                     v = field.document.validate_update_query({operator: v})
                     if operator not in ('$unset', '$currentDate'):
                         v = v[operator]
-                    mongo_kv[k] = v
                 else:
                     field.validate_update_operator(operator, v)
                     # Provide a proper mongo value. Do not call custom to_mongo
@@ -203,28 +269,23 @@ class Document(object):
                     # Model.save().
                     if operator not in ('$unset', '$currentDate'):
                         v = field.to_mongo(v, custom=False)
-                    mongo_kv[k] = v
+                mongo_kv[k] = v
             data[operator] = mongo_kv
         return data
 
 
 class Model(Document):
-
-    # TODO: specify fields to return in a read query (take into account when saving the document, since it will be updated with replace, so, if the document is not complete, it must be read entirely before updating it (or use $set)).
-    # TODO: check Cursor.__init__ and Cursor.find for pymongo 3.x
-    # TODO: to_mongo() for fields in Model.create, Model.update, Model.delete
-    # TODO: rethink Model._changed.
-    # TODO: recursive embebbed document.
-    # TODO: bulk write - api.mongodb.org/python/current/api/pymongo/bulk.html
-    # TODO: support different _id fields, keepin Model._id as default.
-    # TODO: Field.unique
-    # ??: raise error when nothing is updated?
-
     _id = fields.ObjectIdField(auto=True)
 
     class Meta:
         abstract = True
         _embedded = False
+
+    def __init__(self, **kwargs):
+        if '_projection' in kwargs and kwargs['_projection'] is not None and \
+                '_id' not in '_projection':
+            kwargs['_projection'] = ['_id'] + list(kwargs['_projection'])
+        super(Model, self).__init__(**kwargs)
 
     def __unicode__(self):
         # Overwrite __unicode__ only.
@@ -238,7 +299,6 @@ class Model(Document):
         if not cls._meta.collection_connection:
             db = connect(cls._meta.database, **cls._meta.database_attrs)
             cls._meta.collection_connection = db[cls._meta.collection]
-            cls._meta.collection_connection.model_cls = cls
         return cls._meta.collection_connection
 
     @classmethod
@@ -292,21 +352,27 @@ class Model(Document):
         doc = method(filter, data, upsert=upsert, return_document=True)
         doc = cls(**doc)
         doc._changed = False
+        doc.as_python()
         return doc
 
     @classmethod
     def get(cls, **kwargs):
         """
-        Get one document.
+        Get one document. Use kwargs as filter and kwargs['_projection'] as the
+        query projection, which will be used as Model._fields in the result.
         """
-        doc = cls.get_collection().find_one(kwargs)
+        projection = kwargs.pop('_projection', None)
+        doc = cls.get_collection().find_one(kwargs, projection=projection)
         if doc:
+            doc['_fields'] = projection or '__all__'
             doc = cls(**doc)
             doc._changed = False
+            doc.as_python()
             return doc
 
     @classmethod
     def list(cls, **kwargs):
+        # TODO: create custom cursor for pymongo-3dev.
         """
         Get all documents matching the kwargs. Returns pymongo.cursor.Cursor
         with cls as document class.
@@ -337,12 +403,13 @@ class Model(Document):
 
     def save(self):
         collection = self._get_collection()
-        data = self.to_mongo()
-        if self._id:
+        self.as_mongo()
+        data = self.drop_none()
+        if self._id:  # Update.
             data.pop('_id')
             collection.find_one_and_replace(
                 {'_id': self._id}, data, return_document=True)
-        else:
+        else:  # Created.
             result = collection.insert_one(data)
             self._id = result.inserted_id
         self._changed = False
