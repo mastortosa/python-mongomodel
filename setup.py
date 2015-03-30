@@ -7,7 +7,8 @@ setup(
     author_email='modesto@mtdev.co',
     packages=['mongomodel'],
     install_requires=[
-        'python-dateutil'
+        'python-dateutil',
+        'pytz',
     ],
     dependency_links=[
         'https://github.com/mongodb/mongo-python-driver/archive/3.0b0.tar.gz'
