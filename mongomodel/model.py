@@ -14,11 +14,11 @@ def connect(db_name, **kwargs):
         db = _connections[db_name][db_name]
     else:
         host = kwargs.get('host', 'localhost')
-        if 'port' in kwargs:
+        if kwargs.get('port'):
             host = '%s:%s' % (host, kwargs['port'])
-        if 'username' in kwargs:
+        if kwargs.get('user'):
             host = 'mongodb://%s:%s@%s' % (
-                kwargs['username'],
+                kwargs['user'],
                 urllib.quote_plus(kwargs['password']),
                 host)
         _connections[db_name] = Client(host)
@@ -164,7 +164,7 @@ class Document(object):
         return item in self._meta.fields
 
     def __eq__(self, other):
-        return self.to_mongo().to_python() == other.to_mongo().to_python()
+        return self.to_mongo() == other.to_mongo()
 
     def __ne__(self, other):
         return not self.__eq__(other)

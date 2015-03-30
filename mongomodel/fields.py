@@ -301,6 +301,9 @@ class ListField(Field):
         self.field = field
         super(ListField, self).__init__(**kwargs)
 
+    def __set__(self, instance, value):
+        super(ListField, self).__set__(instance, value)
+
     def to_mongo(self, value, *args, **kwargs):
         return super(ListField, self).to_mongo(
             value, utils.list_to_mongo, *args, **kwargs)
@@ -381,10 +384,12 @@ class EmbeddedDocumentField(Field):
             instance._changed = True
 
     def to_mongo(self, value=None, *args, **kwargs):
-        return self.document.to_mongo()
+        doc = value or self.document
+        return doc.to_mongo()
 
     def to_python(self, value=None, *args, **kwargs):
-        return self.document.to_python()
+        doc = value or self.document
+        return doc.to_python()
 
 
 class BinaryField(Field):
