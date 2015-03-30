@@ -7,7 +7,7 @@ setup(
     author_email='modesto@mtdev.co',
     packages=['mongomodel'],
     install_requires=[
-        'pymongo==3.0b0',
+        'git+https://github.com/mongodb/mongo-python-driver.git@3.0-dev',
         'python-dateutil'
     ],
     url='https://github.com/mastortosa/python-mongomodel.git',
