@@ -116,7 +116,7 @@ class Document(object):
         # declared in Field.to_python().
         projection = kwargs.get('_projection')
         if projection and not isinstance(projection, (list, tuple)):
-            raise ValueError('_fields must be None|list|tuple')
+            raise ValueError('_projection must be None|list|tuple')
             # TODO: validate subfields.
         self._projection = projection
 
@@ -304,6 +304,16 @@ class Model(Document):
         return '<%s: %s>' % (self.__class__.__name__, self.__unicode__())
 
     @classmethod
+    def clean_query(cls, **kwargs):
+        query = {}
+        projection = kwargs.pop('_projection', None)
+        if projection and isinstance(projection, (list, set)):
+            projection = dict((i, 1) for i in projection)
+        for k, v in kwargs.items():
+            query[k] = cls._meta.fields[k].to_mongo(v)
+        return query, projection
+
+    @classmethod
     def get_collection(cls):
         if not cls._meta.collection_connection:
             db = connect(cls._meta.database, **cls._meta.database_attrs)
@@ -369,13 +379,14 @@ class Model(Document):
     @classmethod
     def get(cls, **kwargs):
         """
-        Get one document. Use kwargs as filter and kwargs['_projection'] as the
-        query projection, which will be used as Model._fields in the result.
+        Get one document.
         """
-        projection = kwargs.pop('_projection', None)
-        doc = cls.get_collection().find_one(kwargs, projection=projection)
+        query, projection = cls.clean_query(**kwargs)
+        doc = cls.get_collection().find_one(query, projection)
         if doc:
-            doc['_fields'] = projection or '__all__'
+            if projection:
+                projection = projection.keys()
+            doc['_projection'] = projection
             doc = cls(**doc)
             doc._changed = False
             doc.as_python()
