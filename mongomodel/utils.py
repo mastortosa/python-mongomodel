@@ -152,3 +152,21 @@ def load_objectid(value, instance):
 
 def load_binary(value, instance):
     return Binary(value.read())
+
+
+# Model and document utils.
+
+def get_sort_list(ordering):
+    """
+    Returns sort options valid for a mongodb query.
+    ordering: list of key (`key` for direction:1, `-key` for direction:-1)
+    sort: a list of (key, direction) pairs specifying the sort order.
+    """
+    sort = []
+    for i in ordering:
+        if i.startswith('-'):
+            kd = (i[1:], -1)
+        else:
+            kd = (i, 1)
+        sort.append(kd)
+    return sort

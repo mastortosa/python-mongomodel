@@ -3,6 +3,7 @@ import urllib
 
 from mongomodel import fields
 from mongomodel.db import Client
+from mongomodel.utils import get_sort_list
 
 
 _connections = {}
@@ -55,8 +56,11 @@ class ModelMeta(type):
                     meta._embedded = getattr(i, '_embedded')
                     break
 
+        new_class = super(ModelMeta, cls).__new__(cls, name, bases, attrs)
+
         # Get database.
         if not meta._embedded and not getattr(meta, 'abstract', False):
+            # TODO: shold be `database` inheritable?
             meta.database = next((i.database for i in super_meta_list
                                   if hasattr(i, 'database')),
                                  getattr(meta, 'database', None))
@@ -87,7 +91,18 @@ class ModelMeta(type):
             # False
             meta.collection_connection = None
 
-        new_class = super(ModelMeta, cls).__new__(cls, name, bases, attrs)
+            # Get ordering (inheritable).
+            ordering = getattr(meta,
+                               'ordering',
+                               next((i.ordering for i in super_meta_list
+                                     if hasattr(i, 'ordering')),
+                                    None))
+            if ordering:
+                meta.ordering = ordering
+                new_class._sort = get_sort_list(ordering)
+            else:
+                new_class.sort = None
+
         new_class._meta = meta
         return new_class
 
@@ -393,13 +408,21 @@ class Model(Document):
             return doc
 
     @classmethod
-    def list(cls, **kwargs):
+    def list(cls, _projection=None, _skip=0, _limit=0,
+             _no_cursor_timeout=False, _sort=None,
+             _allow_partial_results=False, _oplog_replay=False,
+             _modifiers=None, **filter):
         # TODO: create custom cursor for pymongo-3dev.
         """
         Get all documents matching the kwargs. Returns pymongo.cursor.Cursor
         with cls as document class.
         """
-        return cls.get_collection().find(kwargs)
+        _sort = _sort or cls._sort
+        return cls.get_collection().find(
+            filter=filter, projection=_projection, skip=_skip, limit=_limit,
+            no_cursor_timeout=_no_cursor_timeout, sort=_sort,
+            allow_partial_results=_allow_partial_results,
+            oplog_replay=_oplog_replay)
 
     @classmethod
     def delete(cls, multi=True, **kwargs):
