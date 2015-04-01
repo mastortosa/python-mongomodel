@@ -152,7 +152,18 @@ def load_objectid(value, instance):
 
 
 def load_binary_file(value, instance):
-    return Binary(value.read().encode('base64'))
+    """
+    Returns a json encoded dict with file content_type, filename and body.
+    Encode file in base64 before serialize the dict. `body` must be a string
+    from file|StringIO.read() or tornado|django request file.
+    """
+    return Binary(json.dumps({'body': value['body'].encode('base64'),
+                              'content_type': value['content_type'],
+                              'filename': value['filename']}))
+
+
+def decode_json(value, instance):
+    return json.loads(value)
 
 
 # Model and document utils.

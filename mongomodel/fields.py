@@ -404,3 +404,7 @@ class BinaryFileField(Field):
     def to_mongo(self, value, *args, **kwargs):
         return super(BinaryFileField, self).to_mongo(
             value, utils.load_binary_file, *args, **kwargs)
+
+    def to_python(self, value, *args, **kwargs):
+        return super(BinaryFileField, self).to_python(
+            value, utils.decode_json, *args, **kwargs)

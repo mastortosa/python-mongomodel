@@ -450,7 +450,7 @@ class Model(Document):
         collection = self._get_collection()
         # Save the cleaned and validated data as mongo values, no filter out.
         # Use filtered out date to the query
-        self.as_mongo()
+        self.as_mongo()  # TODO: if not all the required fields are set, this will throw an error when trying to update a document.
         data = self.drop_none()
         if self._id:  # Update.
             data.pop('_id')
