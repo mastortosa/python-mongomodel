@@ -399,8 +399,8 @@ class EmbeddedDocumentField(Field):
         return doc.to_python()
 
 
-class BinaryField(Field):
+class BinaryFileField(Field):
 
     def to_mongo(self, value, *args, **kwargs):
-        return super(BinaryField, self).to_mongo(
-            value, utils.load_binary, *args, **kwargs)
+        return super(BinaryFileField, self).to_mongo(
+            value, utils.load_binary_file, *args, **kwargs)

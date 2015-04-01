@@ -3,6 +3,7 @@ import re
 import time
 import uuid
 from datetime import datetime, date
+from StringIO import StringIO
 
 from bson.objectid import ObjectId
 from bson.binary import Binary
@@ -150,8 +151,8 @@ def load_objectid(value, instance):
     return value
 
 
-def load_binary(value, instance):
-    return Binary(value.read())
+def load_binary_file(value, instance):
+    return Binary(value.read().encode('base64'))
 
 
 # Model and document utils.
