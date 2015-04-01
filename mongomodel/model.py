@@ -101,7 +101,7 @@ class ModelMeta(type):
                 meta.ordering = ordering
                 new_class._sort = get_sort_list(ordering)
             else:
-                new_class.sort = None
+                new_class._sort = None
 
         new_class._meta = meta
         return new_class
