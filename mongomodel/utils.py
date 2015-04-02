@@ -1,3 +1,4 @@
+import os
 import json
 import re
 import time
@@ -157,13 +158,29 @@ def load_binary_file(value, instance):
     Encode file in base64 before serialize the dict. `body` must be a string
     from file|StringIO.read() or tornado|django request file.
     """
-    return Binary(json.dumps({'body': value['body'].encode('base64'),
-                              'content_type': value['content_type'],
-                              'filename': value['filename']}))
+    # First time the file is uploaded the body must be base64-encoded.
+    try:
+        return Binary(json.dumps(value))
+    except UnicodeDecodeError:
+        value['body'] = value['body'].encode('base64')
+        return Binary(json.dumps(value))
 
 
 def decode_json(value, instance):
     return json.loads(value)
+
+
+def load_local_file(value, instance):
+    # Create file from {filename, body, content_type} and return
+    # {url, path, content_type}.
+    if 'body' in value:
+        file_ = open(os.path.join(instance.media_root, value['filename']), 'w')
+        file_.write(value['body'])
+        file_.close()
+        value = {'url': os.path.join(instance.media_url, value['filename']),
+                 'path': os.path.join(instance.media_root, value['filename']),
+                 'content_type': value['content_type']}
+    return value
 
 
 # Model and document utils.

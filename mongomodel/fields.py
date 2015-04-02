@@ -1,4 +1,5 @@
 import pytz
+from StringIO import StringIO
 
 from mongomodel import utils
 
@@ -408,3 +409,15 @@ class BinaryFileField(Field):
     def to_python(self, value, *args, **kwargs):
         return super(BinaryFileField, self).to_python(
             value, utils.decode_json, *args, **kwargs)
+
+
+class LocalFileField(Field):
+
+    def __init__(self, media_root, media_url='/media/', **kwargs):
+        self.media_root = media_root
+        self.media_url = media_url
+        super(LocalFileField, self).__init__(**kwargs)
+
+    def to_mongo(self, value, *args, **kwargs):
+        return super(LocalFileField, self).to_mongo(
+            value, utils.load_local_file, *args, **kwargs)
