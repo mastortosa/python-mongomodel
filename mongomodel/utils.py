@@ -73,6 +73,14 @@ def clean_url(value, instance):
     return value
 
 
+def clean_bool(value, instance):
+    if value == 'on':
+        value = True
+    elif value == 'off':
+        value = False
+    return value
+
+
 def validate_url(value, instance):
     regex = r'^(http|https)://(.*)?((\.\w{2})|(\.\w{3}))$'
     if not re.match(regex, value):

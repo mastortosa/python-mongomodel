@@ -144,7 +144,8 @@ class URLField(TextField):
 class BooleanField(Field):
 
     def to_mongo(self, value, *args, **kwargs):
-        return super(BooleanField, self).to_mongo(value, bool, *args, **kwargs)
+        return super(BooleanField, self).to_mongo(
+            value, utils.clean_bool, bool, *args, **kwargs)
 
     def to_python(self, value, *args, **kwargs):
         return super(BooleanField, self).to_python(
