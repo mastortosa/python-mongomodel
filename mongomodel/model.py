@@ -257,7 +257,7 @@ class Document(object):
             # {'num_field': None} -> {'$unset': {'num_field': ''}}
             # {'bool_field': None} -> {'$set': {'bool_field': False}}
             if not operator.startswith('$'):
-                if kv is None:
+                if kv in (None, ''):
                     try:
                         field = cls._meta.fields[operator.split('.')[0]]
                     except KeyError:
