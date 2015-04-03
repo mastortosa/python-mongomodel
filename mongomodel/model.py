@@ -252,6 +252,26 @@ class Document(object):
         # validation since a document may be part of a model to update.
         data = {}
         for operator, kv in update.items():
+            # Support update without operators:
+            # {'num_field': 1} -> {'$set': {'num_field': 1}}
+            # {'num_field': None} -> {'$unset': {'num_field': ''}}
+            # {'bool_field': None} -> {'$set': {'bool_field': False}}
+            if not operator.startswith('$'):
+                if kv is None:
+                    try:
+                        field = cls._meta.fields[operator.split('.')[0]]
+                    except KeyError:
+                        raise ValueError('%s is not a field' % kv)
+                    else:
+                        if isinstance(field, fields.BooleanField):
+                            kv = {operator: False}
+                            operator = '$set'
+                        else:
+                            kv = {operator: ''}
+                            operator = '$unset'
+                else:
+                    kv = {operator: kv}
+                    operator = '$set'
             mongo_kv = {}
             for k, v in kv.items():
                 # Save raw k, v to use in the update query, then it's possible
@@ -399,6 +419,9 @@ class Model(Document):
             method = collection.find_one_and_update
         doc = method(query, data, projection=projection, upsert=upsert,
                      sort=sort, return_document=True)
+        print query
+        print data
+        print doc
         doc = cls(**doc)
         doc._changed = False
         doc.as_python()
