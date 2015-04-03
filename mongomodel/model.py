@@ -274,14 +274,6 @@ class Document(object):
                     operator = '$set'
             mongo_kv = {}
             for k, v in kv.items():
-                # Save raw k, v to use in the update query, then it's possible
-                # to set and unset differents values of an embedded documents.
-                # wrong:
-                # query = {$set: {doc: {foo: 1}}}, {$unset: {doc: {bar: ''}}}}
-                # right
-                # query = {$set: {doc.foo: 1}}, {$unset: {doc.bar: ''}}}
-                raw_k = k
-                raw_v = v
                 k_split = k.split('.')
                 if len(k_split) > 1:
                     # Convert from compacted to extended query. Eg:
@@ -304,6 +296,7 @@ class Document(object):
                     v = field.document.validate_update_query({operator: v})
                     if operator not in ('$unset', '$currentDate'):
                         v = v[operator]
+                    k = '.'.join(k_split)
                 else:
                     field.validate_update_operator(operator, v)
                     # Provide a proper mongo value. Do not call custom to_mongo
@@ -324,7 +317,7 @@ class Document(object):
                 # if k in mongo_kv and isinstance(mongo_kv[k], dict):
                 #     mongo_kv[k].update(v)
                 # else:
-                mongo_kv[raw_k] = raw_v
+                mongo_kv[k] = v
             if operator in data:
                 data[operator].update(mongo_kv)
             else:
@@ -422,9 +415,6 @@ class Model(Document):
             method = collection.find_one_and_update
         doc = method(query, data, projection=projection, upsert=upsert,
                      sort=sort, return_document=True)
-        print query
-        print data
-        print doc
         doc = cls(**doc)
         doc._changed = False
         doc.as_python()
