@@ -325,7 +325,10 @@ class Document(object):
                 #     mongo_kv[k].update(v)
                 # else:
                 mongo_kv[raw_k] = raw_v
-            data[operator] = mongo_kv
+            if operator in data:
+                data[operator].update(mongo_kv)
+            else:
+                data[operator] = mongo_kv
         return data
 
 
