@@ -293,7 +293,10 @@ class Document(object):
                     # Model.save().
                     if operator not in ('$unset', '$currentDate'):
                         v = field.to_mongo(v, custom=False)
-                mongo_kv[k] = v
+                if k in mongo_kv and isinstance(mongo_kv[k], dict):
+                    mongo_kv[k].update(v)
+                else:
+                    mongo_kv[k] = v
             data[operator] = mongo_kv
         return data
 
@@ -368,14 +371,15 @@ class Model(Document):
             return doc
 
     @classmethod
-    def update(cls, filter, update, upsert=False, multi=False, replace=False):
+    def update(cls, query, update, multi=False, replace=False, projection=None,
+               upsert=False, sort=None):
         """
         Update one or more documents.
         """
         collection = cls.get_collection()
         if multi:
             data = cls.validate_update_query(update)
-            return collection.update_many(filter, data, upsert)
+            return collection.update_many(query, data, upsert)
         elif replace:
             # New document from update. Get data from a new model instance.
             doc = cls(**update)
@@ -385,7 +389,8 @@ class Model(Document):
             # Some attributes of the document will be updated.
             data = cls.validate_update_query(update)
             method = collection.find_one_and_update
-        doc = method(filter, data, upsert=upsert, return_document=True)
+        doc = method(query, data, projection=projection, upsert=upsert,
+                     sort=sort, return_document=True)
         doc = cls(**doc)
         doc._changed = False
         doc.as_python()
