@@ -371,10 +371,20 @@ class EmbeddedDocumentField(Field):
         super(EmbeddedDocumentField, self).__set__(instance, value)
 
     def to_mongo(self, value, *args, **kwargs):
-        return self.document_class(**value).to_mongo()
+        if value is None:
+            if self.required:
+                raise self.ValidationError('Value can\'t be none if required',
+                                           instance=self)
+        else:
+            if value != {}:
+                value = self.document_class(**(value)).to_mongo()
+            return value
 
     def to_python(self, value, *args, **kwargs):
-        return self.document_class(**value).to_python()
+        if value is not None:
+            if value != {}:
+                value = self.document_class(**(value)).to_python()
+            return value
 
 
 class BinaryFileField(Field):
