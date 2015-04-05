@@ -172,9 +172,6 @@ class Document(object):
     def __str__(self):
         return str(self.__unicode__())
 
-    def __repr__(self):
-        return str(self.__unicode__())
-
     def __contains__(self, item):
         return item in self._meta.fields
 
@@ -283,6 +280,7 @@ class Document(object):
                     for k in k_split[:-1]:
                         v = {k: v}
                     k = k_split[-1]
+                    k_split.reverse()
                 try:
                     field = cls._meta.fields[k]
                 except KeyError:
@@ -294,9 +292,9 @@ class Document(object):
                     # ??: convert from extended query to compacted query?
                 elif isinstance(field, fields.EmbeddedDocumentField):
                     v = field.document.validate_update_query({operator: v})
-                    if operator not in ('$unset', '$currentDate'):
-                        v = v[operator]
+                    # At this point, v will be {operator: {embedded: value}}
                     k = '.'.join(k_split)
+                    v = v[operator].values()[0]
                 else:
                     field.validate_update_operator(operator, v)
                     # Provide a proper mongo value. Do not call custom to_mongo

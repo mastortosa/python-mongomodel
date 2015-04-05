@@ -303,9 +303,6 @@ class ListField(Field):
         self.field = field
         super(ListField, self).__init__(**kwargs)
 
-    def __set__(self, instance, value):
-        super(ListField, self).__set__(instance, value)
-
     def to_mongo(self, value, *args, **kwargs):
         return super(ListField, self).to_mongo(
             value, utils.list_to_mongo, *args, **kwargs)
@@ -365,40 +362,19 @@ class EmbeddedDocumentField(Field):
     _projection = None
 
     def __init__(self, document_class, **kwargs):
-        self.document = document_class()  # TODO: validate
+        self.document_class = document_class  # TODO: validate
         super(EmbeddedDocumentField, self).__init__(**kwargs)
 
-    def __get__(self, instance, owner):
-        return self.document
-
     def __set__(self, instance, value):
-        if instance is not None:
-            if isinstance(value, self.document.__class__):
-                self.document = value
-            elif isinstance(value, dict):
-                self.document = self.document.__class__(**value)
-            else:
-                raise self.ValidationError(
-                    'Can\'t set %s as %s' % (type(value),
-                                             self.document.__class__),
-                    instance=instance)
-            instance._data[self.name] = self.document._data
-            instance._changed = True
+        if isinstance(value, self.document_class):
+            value = value._data
+        super(EmbeddedDocumentField, self).__set__(instance, value)
 
-    def to_mongo(self, value=None, *args, **kwargs):
-        # TODO: not happy with this.
-        if isinstance(value, self.document.__class__):
-            doc = value
-        else:
-            doc = self.document
-        return doc.to_mongo()
+    def to_mongo(self, value, *args, **kwargs):
+        return self.document_class(**value).to_mongo()
 
-    def to_python(self, value=None, *args, **kwargs):
-        if isinstance(value, self.document.__class__):
-            doc = value
-        else:
-            doc = self.document
-        return doc.to_python()
+    def to_python(self, value, *args, **kwargs):
+        return self.document_class(**value).to_python()
 
 
 class BinaryFileField(Field):
