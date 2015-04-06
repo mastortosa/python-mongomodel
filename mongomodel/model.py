@@ -245,7 +245,6 @@ class Document(object):
 
     @classmethod
     def validate_update_query(cls, update):
-        print 'validate_update_query', cls.__name__, update
         # Although Document has no db operation it must provide an update
         # validation since a document may be part of a model to update.
         data = {}
@@ -299,11 +298,12 @@ class Document(object):
                     v = document.validate_update_query({operator: v})
                     v = v[operator]
                     # Clean.
-                    v_clean = {}
-                    for sub_k, sub_v in v.items():
-                        subfield = document._meta.fields[sub_k]
-                        v_clean[sub_k] = subfield.to_mongo(sub_v)
-                    v = v_clean
+                    if operator != '$unset':
+                        v_clean = {}
+                        for sub_k, sub_v in v.items():
+                            subfield = document._meta.fields[sub_k]
+                            v_clean[sub_k] = subfield.to_mongo(sub_v)
+                        v = v_clean
                     if len(k_split) > 1:
                         mongo_kv['.'.join(k_split[:-1])] = v
                     else:
