@@ -247,6 +247,10 @@ class Document(object):
     def validate_update_query(cls, update):
         # Although Document has no db operation it must provide an update
         # validation since a document may be part of a model to update.
+        # To be able to update different embedded document fields at the same
+        # time, refer to them as a packet form:
+        # use {'$set': {'doc.field': 23}}
+        # instead of {'$set': {'doc': {'field': 23}}}
         data = {}
         for operator, kv in update.items():
             # Support update without operators:
@@ -305,7 +309,7 @@ class Document(object):
                             v_clean[sub_k] = subfield.to_mongo(sub_v)
                         v = v_clean
                     if len(k_split) > 1:
-                        mongo_kv['.'.join(k_split[:-1])] = v
+                        mongo_kv['.'.join(k_split)] = v.values()[0]
                     else:
                         mongo_kv[k] = v
                 else:
@@ -330,7 +334,6 @@ class Document(object):
                 data[operator].update(mongo_kv)
             else:
                 data[operator] = mongo_kv
-        print 'data', data
         return data
 
 
