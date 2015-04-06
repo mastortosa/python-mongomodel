@@ -61,7 +61,9 @@ class Field(object):
 
     def to_mongo(self, value, *args, **kwargs):
         if value is None:
-            if self.required and not self.auto:
+            if isinstance(self, BooleanField):
+                return False
+            elif self.required and not self.auto:
                 raise self.ValidationError('Value can\'t be none if required',
                                            instance=self)
             else:
