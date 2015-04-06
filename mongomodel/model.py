@@ -245,6 +245,7 @@ class Document(object):
 
     @classmethod
     def validate_update_query(cls, update):
+        print 'validate_update_query', cls.__name__, update
         # Although Document has no db operation it must provide an update
         # validation since a document may be part of a model to update.
         data = {}
@@ -286,15 +287,27 @@ class Document(object):
                 except KeyError:
                     raise ValueError('%s is not a field' % k)
                 if isinstance(field, fields.ListField):
+                    # Validate
                     field.validate_update_operator(operator, v)
-                    # TODO: call to_mongo with custom=False according to the
-                    #       field.validate_update_operator comments.
-                    # ??: convert from extended query to compacted query?
+                    # Clean
+                    if operator not in ('$unset', '$currentDate'):
+                        v = field.to_mongo(v, custom=False)
+                    mongo_kv[k] = v
                 elif isinstance(field, fields.EmbeddedDocumentField):
-                    v = field.document.validate_update_query({operator: v})
-                    # At this point, v will be {operator: {embedded: value}}
-                    k = '.'.join(k_split)
-                    v = v[operator].values()[0]
+                    # Validate.
+                    document = field.document_class()
+                    v = document.validate_update_query({operator: v})
+                    v = v[operator]
+                    # Clean.
+                    v_clean = {}
+                    for sub_k, sub_v in v.items():
+                        subfield = document._meta.fields[sub_k]
+                        v_clean[sub_k] = subfield.to_mongo(sub_v)
+                    v = v_clean
+                    if len(k_split) > 1:
+                        mongo_kv['.'.join(k_split[:-1])] = v
+                    else:
+                        mongo_kv[k] = v
                 else:
                     field.validate_update_operator(operator, v)
                     # Provide a proper mongo value. Do not call custom to_mongo
@@ -310,16 +323,14 @@ class Document(object):
                     # doc: {'nat': 2} -> update -> doc: {'nat': -1}  # Invalid.
                     # To avoid this, use Model.update() with replace=True or
                     # Model.save().
-                if operator not in ('$unset', '$currentDate'):
-                    v = field.to_mongo(v, custom=False)
-                # if k in mongo_kv and isinstance(mongo_kv[k], dict):
-                #     mongo_kv[k].update(v)
-                # else:
-                mongo_kv[k] = v
+                    if operator not in ('$unset', '$currentDate'):
+                        v = field.to_mongo(v, custom=False)
+                    mongo_kv[k] = v
             if operator in data:
                 data[operator].update(mongo_kv)
             else:
                 data[operator] = mongo_kv
+        print 'data', data
         return data
 
 
@@ -413,10 +424,11 @@ class Model(Document):
             method = collection.find_one_and_update
         doc = method(query, data, projection=projection, upsert=upsert,
                      sort=sort, return_document=True)
-        doc = cls(**doc)
-        doc._changed = False
-        doc.as_python()
-        return doc
+        if doc:
+            doc = cls(**doc)
+            doc._changed = False
+            doc.as_python()
+            return doc
 
     @classmethod
     def get(cls, **kwargs):
