@@ -17,6 +17,8 @@ def json_default_encode(x):
         return x.isoformat()
     if isinstance(x, ObjectId):
         return str(x)
+    if isinstance(x, (set, tuple)):
+        return list(x)
 
 
 def json_encode(x):

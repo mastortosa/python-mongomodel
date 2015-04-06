@@ -310,8 +310,8 @@ class Document(object):
                     # doc: {'nat': 2} -> update -> doc: {'nat': -1}  # Invalid.
                     # To avoid this, use Model.update() with replace=True or
                     # Model.save().
-                    if operator not in ('$unset', '$currentDate'):
-                        v = field.to_mongo(v, custom=False)
+                if operator not in ('$unset', '$currentDate'):
+                    v = field.to_mongo(v, custom=False)
                 # if k in mongo_kv and isinstance(mongo_kv[k], dict):
                 #     mongo_kv[k].update(v)
                 # else:

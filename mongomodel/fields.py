@@ -377,13 +377,13 @@ class EmbeddedDocumentField(Field):
                                            instance=self)
         else:
             if value != {}:
-                value = self.document_class(**(value)).to_mongo()
+                value = self.document_class(**value).to_mongo()
             return value
 
     def to_python(self, value, *args, **kwargs):
         if value is not None:
             if value != {}:
-                value = self.document_class(**(value)).to_python()
+                value = self.document_class(**value).to_python()
             return value
 
 
