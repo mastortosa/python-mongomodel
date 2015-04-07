@@ -79,7 +79,8 @@ class Field(object):
     def to_python(self, value, *args, **kwargs):
         if value is None:
             return None
-        if isinstance(value, (TextField, ObjectIdField)) and not value:
+        if isinstance(self, (TextField, ObjectIdField)) and not value:
+            print 'yeah'
             return None
         if kwargs.get('custom', True):
             args = list(args) + self._to_python
