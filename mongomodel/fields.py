@@ -63,14 +63,15 @@ class Field(object):
         if value is None:
             if isinstance(self, BooleanField):
                 return False
-            elif isinstance(self, TextField) and not self.required:
-                return None
             elif self.required and not self.auto:
                 raise self.ValidationError('Value can\'t be none if required',
                                            instance=self)
             else:
                 return None
         else:
+            if isinstance(self, TextField) and value == '' and \
+                    not self.required:
+                return None
             if kwargs.get('custom', True):
                 args = list(args) + self._to_mongo
             return self._process(value, *args)
