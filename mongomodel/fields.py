@@ -63,6 +63,8 @@ class Field(object):
         if value is None:
             if isinstance(self, BooleanField):
                 return False
+            elif isinstance(self, TextField) and not self.required:
+                return None
             elif self.required and not self.auto:
                 raise self.ValidationError('Value can\'t be none if required',
                                            instance=self)
