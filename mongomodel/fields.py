@@ -69,7 +69,7 @@ class Field(object):
             else:
                 return None
         else:
-            if isinstance(self, TextField) and value == '' and \
+            if isinstance(self, (TextField, ObjectIdField)) and not value and \
                     not self.required:
                 return None
             if kwargs.get('custom', True):
@@ -78,6 +78,8 @@ class Field(object):
 
     def to_python(self, value, *args, **kwargs):
         if value is None:
+            return None
+        if isinstance(value, (TextField, ObjectIdField)) and not value:
             return None
         if kwargs.get('custom', True):
             args = list(args) + self._to_python
