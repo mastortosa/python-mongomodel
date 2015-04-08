@@ -12,13 +12,13 @@ import dateutil.parser
 
 
 def json_default_encode(x):
-    """Allow date and datetime JSON encoding."""
     if isinstance(x, (datetime, date)):
         return x.isoformat()
     if isinstance(x, ObjectId):
         return str(x)
     if isinstance(x, (set, tuple)):
         return list(x)
+    # TODO: Model and Document
 
 
 def json_encode(x):

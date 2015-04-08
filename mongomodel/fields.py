@@ -342,6 +342,11 @@ class ListField(Field):
         # 3) { modifier : value | [value] }
         # 4) { $ : { xfield : xvalue } }
 
+        # print
+        # print 'ListField.validate_update_operator'
+        # print operator
+        # print value
+
         super(ListField, self).validate_update_operator(operator, value)
         # Is a dict with self.field data (EmbeddedDoc) or a dict like 2, 3, 4).
         if isinstance(value, dict) and \
@@ -359,7 +364,13 @@ class ListField(Field):
                 self.field.validate_update_operator(operator, i)
         elif isinstance(value, dict):
             # 2, 3, 4)
-            pass  # TODO
+            for modifier, value in value.items():
+                # TODO: value may be a list?
+                if isinstance(self.field, EmbeddedDocumentField):
+                    # print
+                    # print 'validate EmbeddedDocumentField of a ListField'
+                    document = self.field.document_class()
+                    document.validate_update_query({operator: value})
 
 
 class SetField(ListField):

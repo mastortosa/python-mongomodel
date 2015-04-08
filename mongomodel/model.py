@@ -251,9 +251,15 @@ class Document(object):
         # time, refer to them as a packet form:
         # use {'$set': {'doc.field': 23}}
         # instead of {'$set': {'doc': {'field': 23}}}
+        # print
+        # print 'validate_update_query'
         data = {}
         for operator, kv in update.items():
-            # Support update without operators:
+            # print
+            # print 'for operator, kv in update.items():'
+            # print operator
+            # print kv
+            # # Support update without operators:
             # {'num_field': 1} -> {'$set': {'num_field': 1}}
             # {'num_field': None} -> {'$unset': {'num_field': ''}}
             # {'bool_field': None} -> {'$set': {'bool_field': False}}
@@ -275,18 +281,33 @@ class Document(object):
                     operator = '$set'
             mongo_kv = {}
             for k, v in kv.items():
-                k_split = k.split('.')
-                if len(k_split) > 1:
+                # print
+                # print 'for k, v in kv.items():'
+                # print k
+                # print v
+                # $ operator must be next to the field name (egg.$):
+                k_splits = []
+                for i in k.split('.'):
+                    if i != '$':
+                        k_splits.append(i)
+                    else:
+                        k_splits[-1] += '.' + i
+                k_splits
+                if len(k_splits) > 1:
                     # Convert from compacted to extended query. Eg:
                     # {k, v}; k ='key.subkey.num'; v = 2
                     # {k, v}; k ='key'; v={'subkey': {'num': 2}})}
-                    k_split.reverse()
-                    for k in k_split[:-1]:
+                    k_splits.reverse()
+                    for k in k_splits[:-1]:
                         v = {k: v}
-                    k = k_split[-1]
-                    k_split.reverse()
+                    k = k_splits[-1]
+                    k_splits.reverse()
+                # print
+                # print k
+                # print v
                 try:
-                    field = cls._meta.fields[k]
+                    # Get field from `name` and `name.$`.
+                    field = cls._meta.fields[k.split('.')[0]]
                 except KeyError:
                     raise ValueError('%s is not a field' % k)
                 if isinstance(field, fields.ListField):
@@ -294,8 +315,35 @@ class Document(object):
                     field.validate_update_operator(operator, v)
                     # Clean
                     if operator not in ('$unset', '$currentDate'):
+                        # print
+                        # print 'clean'
+                        # print operator
+                        # print field
+                        # print v
                         if isinstance(v, dict):
-                            v = field.field.to_mongo(v, custom=False)
+                            # print
+                            # print 'clean dict'
+                            if v.keys()[0].startswith('$'):  # TEMP
+                                v_clean = {}
+                                for v_modifier, v_value in v.items():
+                                    if isinstance(v_value, dict):
+                                        v_clean[v_modifier] = {}
+                                        modifier = v_clean[v_modifier]
+                                        embedded_fields = field.field.document_class._meta.fields
+                                        for embedded_k, embedded_v in v_value.items():
+                                            modifier[embedded_k] = embedded_fields[embedded_k].to_mongo(embedded_v)
+                                    # else:  # TODO
+                                v = v_clean
+                                # print v
+                            elif k.endswith('$'):
+                                v_clean = {}
+                                embedded_fields = field.field.document_class._meta.fields
+                                for embedded_k, embedded_v in v.items():
+                                    v_clean[embedded_k] = embedded_fields[embedded_k].to_mongo(embedded_v)
+                                v = v_clean
+                            else:
+                                # TODO: fix this.
+                                v = field.field.to_mongo(v, custom=False)
                         elif isinstance(v, field.field.document_class):
                             # Validate item of the list.
                             v = field.field.to_mongo(v, custom=False)
@@ -315,8 +363,8 @@ class Document(object):
                             subfield = document._meta.fields[sub_k]
                             v_clean[sub_k] = subfield.to_mongo(sub_v)
                         v = v_clean
-                    if len(k_split) > 1:
-                        mongo_kv['.'.join(k_split)] = v.values()[0]
+                    if len(k_splits) > 1:
+                        mongo_kv['.'.join(k_splits)] = v.values()[0]
                     else:
                         mongo_kv[k] = v
                 else:
@@ -341,6 +389,9 @@ class Document(object):
                 data[operator].update(mongo_kv)
             else:
                 data[operator] = mongo_kv
+            print
+            print 'update'
+            print data
         return data
 
 
@@ -434,6 +485,9 @@ class Model(Document):
             method = collection.find_one_and_update
         doc = method(query, data, projection=projection, upsert=upsert,
                      sort=sort, return_document=True)
+        # print
+        # print 'doc'
+        # print doc
         if doc:
             doc = cls(**doc)
             doc._changed = False
