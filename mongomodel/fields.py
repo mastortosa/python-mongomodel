@@ -80,7 +80,6 @@ class Field(object):
         if value is None:
             return None
         if isinstance(self, (TextField, ObjectIdField)) and not value:
-            print 'yeah'
             return None
         if kwargs.get('custom', True):
             args = list(args) + self._to_python
@@ -344,9 +343,16 @@ class ListField(Field):
         # 4) { $ : { xfield : xvalue } }
 
         super(ListField, self).validate_update_operator(operator, value)
-        if isinstance(value, self.field.__class__):
+        # Is a dict with self.field data (EmbeddedDoc) or a dict like 2, 3, 4).
+        if isinstance(value, dict) and \
+                value.keys()[0] not in ('$',) + self._update_modifiers:
+            value = self.field.document_class(**value)
+        if isinstance(value, self.field.document_class):
             # 1) Validate value.
-            self.field.validate_update_operator(operator, value)
+            # TODO: not happy with this.
+            # TODO: don't validate? value must be a valid self.fiend.document_class
+            # self.field.validate_update_operator(operator, value)
+            pass
         elif isinstance(value, list):
             # 1) Validate each value in list.
             for i in value:

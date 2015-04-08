@@ -294,7 +294,14 @@ class Document(object):
                     field.validate_update_operator(operator, v)
                     # Clean
                     if operator not in ('$unset', '$currentDate'):
-                        v = field.to_mongo(v, custom=False)
+                        if isinstance(v, dict):
+                            v = field.field.to_mongo(v, custom=False)
+                        elif isinstance(v, field.field.document_class):
+                            # Validate item of the list.
+                            v = field.field.to_mongo(v, custom=False)
+                        else:
+                            # Validate the list.
+                            v = field.to_mongo(v, custom=False)
                     mongo_kv[k] = v
                 elif isinstance(field, fields.EmbeddedDocumentField):
                     # Validate.
