@@ -24,6 +24,9 @@ class Cursor(PyMongoCursor):
             doc.as_python()
             yield doc
 
+    def __len__(self):
+        return self.count()
+
 
 class Collection(PyMongoCollection):
 
