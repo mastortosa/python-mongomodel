@@ -350,6 +350,8 @@ class Model(Document):
     @classmethod
     def update(cls, query, update, projection=None, upsert=False, sort=None):
         # Simple support to update (set/unset) without operators.
+        print
+        print update
         data = {}
         for operator, value in update.items():
             if not operator.startswith('$'):
@@ -370,9 +372,14 @@ class Model(Document):
                 else:
                     value = {operator: value}
                     operator = '$set'
-            data[operator] = value
-        update = data
+            if operator in data:
+                data[operator].update(value)
+            else:
+                data[operator] = value
 
+        update = data
+        print
+        print update
         col = cls.get_collection()
         doc = col.find_one_and_update(query, update, projection=projection,
                                       upsert=upsert, sort=sort,
