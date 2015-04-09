@@ -253,6 +253,7 @@ class Model(Document):
         if not cls._meta.collection_connection:
             db = connect(cls._meta.database, **cls._meta.database_attrs)
             cls._meta.collection_connection = db[cls._meta.collection]
+            cls._meta.collection_connection.document_class = cls
         return cls._meta.collection_connection
 
     @classmethod
