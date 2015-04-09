@@ -353,6 +353,30 @@ class Model(Document):
 
     @classmethod
     def update(cls, query, update, projection=None, upsert=False, sort=None):
+        # Simple support to update (set/unset) without operators.
+        data = {}
+        for operator, value in update.items():
+            if not operator.startswith('$'):
+                if value in (None, ''):
+                    try:
+                        field = cls._meta.fields[operator.split('.')[0]]
+                    except KeyError:
+                        raise ValueError('%s is not a field' % value)
+                    else:
+                        if isinstance(field, fields.BooleanField):
+                            value = {operator: False}
+                            operator = '$set'
+                        else:
+                            if field.required:
+                                raise ValueError('%s is required' % field.name)
+                            value = {operator: ''}
+                            operator = '$unset'
+                else:
+                    value = {operator: value}
+                    operator = '$set'
+            data[operator] = value
+        update = data
+
         col = cls.get_collection()
         doc = col.find_one_and_update(query, update, projection=projection,
                                       upsert=upsert, sort=sort,
