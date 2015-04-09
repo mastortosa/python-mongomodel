@@ -365,8 +365,9 @@ class Model(Document):
                             value = {operator: False}
                             operator = '$set'
                         else:
-                            if field.required:
-                                raise ValueError('%s is required' % field.name)
+                            # TODO
+                            # if field.required:
+                            #     raise ValueError('%s is required' % field.name)
                             value = {operator: ''}
                             operator = '$unset'
                 else:
