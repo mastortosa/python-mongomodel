@@ -365,9 +365,16 @@ class Model(Document):
                             value = {operator: False}
                             operator = '$set'
                         else:
-                            # TODO
-                            # if field.required:
-                            #     raise ValueError('%s is required' % field.name)
+                            # TEMP
+                            if field.required:
+                                if isinstance(field, fields.EmbeddedDocumentField):
+                                    field_splits = operator.split('.')
+                                    if len(field_splits) > 1:  # TEMP: support for one level.
+                                        field = field.document_class._meta.fields[field_splits[1]]
+                                        if field.required:
+                                            raise ValueError('%s is required' % field.name)
+                                else:
+                                    raise ValueError('%s is required' % field.name)
                             value = {operator: ''}
                             operator = '$unset'
                 else:
