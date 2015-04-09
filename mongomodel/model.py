@@ -302,12 +302,7 @@ class Model(Document):
                 'modifiers': query.pop('_modifiers', None),
                 'manipulate': query.pop('_manipulate', True)})
 
-        doc = cls.get_collection().find_one(query, **kwargs)
-        if doc:
-            doc = cls(_validate_required=False, **doc)
-            doc._changed = False
-            doc.as_python()
-            return doc
+        return cls.get_collection().find_one(query, **kwargs)
 
     @classmethod
     def find(cls, query=None, **kwargs):  # TODO: DRY.
