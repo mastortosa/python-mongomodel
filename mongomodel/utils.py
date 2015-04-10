@@ -209,3 +209,50 @@ def get_sort_list(ordering):
             kd = (i, 1)
         sort.append(kd)
     return sort
+
+
+def format_update(data):
+    """
+    Formats cleaned and validated data to $set/$unset operators.
+    data = {
+        'field1': value1,
+        'field2': None,
+        'field3': {
+            'subfield1': value2,
+            'subfield2': None
+        }
+    }
+    format_update(data)
+    >>> {
+        '$set': {
+            'field1': value1,
+            'field3.subfield1': value2
+        },
+        '$unset': {
+            'field2': '',
+            'field3.subfield2': ''
+        }
+    }
+    """
+    update = {'$set': {}, '$unset': {}}
+    for field, value in data.items():
+        if isinstance(value, dict):
+            for subfield, value in value.items():
+                if value is None:
+                    operator = '$unset'
+                    value = ''
+                else:
+                    operator = '$set'
+                update[operator]['%s.%s' % (field, subfield)] = value
+        else:
+            if value is None:
+                operator = '$unset'
+                value = ''
+            else:
+                operator = '$set'
+            update[operator][field] = value
+    if not update['$set']:
+        update.pop('$set')
+    if not update['$unset']:
+        update.pop('$unset')
+    return update

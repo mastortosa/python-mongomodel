@@ -3,7 +3,7 @@ import urllib
 
 from mongomodel import fields
 from mongomodel.db import Client
-from mongomodel.utils import get_sort_list
+from mongomodel.utils import get_sort_list, format_update
 
 
 _connections = {}
@@ -349,45 +349,9 @@ class Model(Document):
 
     @classmethod
     def update(cls, query, update, projection=None, upsert=False, sort=None):
-        # Simple support to update (set/unset) without operators.
-        print
-        print update
-        data = {}
-        for operator, value in update.items():
-            if not operator.startswith('$'):
-                if value in (None, ''):
-                    try:
-                        field = cls._meta.fields[operator.split('.')[0]]
-                    except KeyError:
-                        raise ValueError('%s is not a field' % value)
-                    else:
-                        if isinstance(field, fields.BooleanField):
-                            value = {operator: False}
-                            operator = '$set'
-                        else:
-                            # TEMP
-                            if field.required:
-                                if isinstance(field, fields.EmbeddedDocumentField):
-                                    field_splits = operator.split('.')
-                                    if len(field_splits) > 1:  # TEMP: support for one level.
-                                        field = field.document_class._meta.fields[field_splits[1]]
-                                        if field.required:
-                                            raise ValueError('%s is required' % field.name)
-                                else:
-                                    raise ValueError('%s is required' % field.name)
-                            value = {operator: ''}
-                            operator = '$unset'
-                else:
-                    value = {operator: value}
-                    operator = '$set'
-            if operator in data:
-                data[operator].update(value)
-            else:
-                data[operator] = value
-
-        update = data
-        print
-        print update
+        if not update.keys()[0].startswith('$'):
+            update = cls(_validate_required=False, **update).to_mongo()
+            update = format_update(update)
         col = cls.get_collection()
         doc = col.find_one_and_update(query, update, projection=projection,
                                       upsert=upsert, sort=sort,
