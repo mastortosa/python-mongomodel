@@ -84,7 +84,7 @@ def clean_bool(value, instance):
 
 
 def validate_url(value, instance):
-    regex = r'^(http|https)://(.*)?((\.\w{2})|(\.\w{3}))$'
+    regex = r'^(http|https)://(.*)\.\w{2}|\w{3}$'
     if not re.match(regex, value):
         raise instance.ValidationError(instance=instance)
     return value
