@@ -189,8 +189,12 @@ class Document(object):
             if self._validate_required:
                 value = self._data[name]
             else:
-                value = self._data.get(name)
-                if value is None:
+                if name in self._data:
+                    value = self._data[name]
+                    if value is None:
+                        doc[name] = None
+                        continue
+                else:
                     continue
             field = self._meta.fields[name]
             value = field.to_mongo(value)
