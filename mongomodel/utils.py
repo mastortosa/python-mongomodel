@@ -101,6 +101,8 @@ def list_to_python(value, instance):
 def load_datetime(value, instance):
     if isinstance(value, (str, unicode)):
         value = dateutil.parser.parse(value)
+    elif isinstance(value, datetime):
+        pass
     elif isinstance(value, date):
         value = datetime.combine(value, datetime.min.time())
     return value

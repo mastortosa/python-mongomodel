@@ -203,7 +203,7 @@ class Document(object):
             doc[name] = value
         return doc
 
-    def to_python(self):
+    def to_python(self, drop_none=False):
         """
         Return dict data with the Model._data as a python valid object and
         validated using all fields.to_python.
@@ -218,10 +218,15 @@ class Document(object):
             else:
                 if name in self._data:
                     value = self._data[name]
+                    if value is None and drop_none:
+                        continue
                 else:
                     continue
             field = self._meta.fields[name]
-            value = field.to_python(value)
+            if isinstance(field, fields.EmbeddedDocumentField):
+                value = field.to_python(value, drop_none=drop_none)
+            else:
+                value = field.to_python(value)
             doc[name] = value
         return doc
 
