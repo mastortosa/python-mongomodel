@@ -314,6 +314,7 @@ class Model(Document):
 
     @classmethod
     def find(cls, query=None, **kwargs):  # TODO: DRY.
+        _sort = getattr(cls, '_sort', None)
         if query is None:
             query = kwargs
             kwargs = {}
@@ -322,13 +323,15 @@ class Model(Document):
                 'skip': query.pop('_skip', 0),
                 'limit': query.pop('_limit', 0),
                 'no_cursor_timeout': query.pop('_no_cursor_timeout', False),
-                'sort': query.pop('_sort', None),
+                'sort': query.pop('_sort', _sort),
                 'allow_partial_results': query.pop('_allow_partial_results',
                                                    False),
                 'oplog_replay': query.pop('_oplog_replay', False),
                 'modifiers': query.pop('_modifiers', None),
                 'manipulate': query.pop('_manipulate', True)})
-
+        else:
+            if 'sort' not in kwargs:
+                kwargs['sort'] = _sort
         return cls.get_collection().find(query, **kwargs)
 
     @classmethod
