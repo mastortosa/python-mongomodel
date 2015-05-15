@@ -196,6 +196,12 @@ class JSONField(Field):
             value, lambda x, _: utils.encode_json(x), *args, **kwargs)
 
 
+class DictField(Field):
+
+    def to_mongo(self, value, *args, **kwargs):
+        return super(DictField, self).to_mongo(value, dict, *args, **kwargs)
+
+
 class DateTimeField(Field):
     _update_operators = ('$setOnInsert', '$set', '$min', '$max',
                          '$currentDate',)
