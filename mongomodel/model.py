@@ -18,10 +18,12 @@ def connect(db_name, **kwargs):
         if kwargs.get('port'):
             host = '%s:%s' % (host, kwargs['port'])
         if kwargs.get('user'):
-            host = 'mongodb://%s:%s@%s' % (
+            host = 'mongodb://%s:%s@%s/%s?authMechanism=%s' % (
                 kwargs['user'],
                 urllib.quote_plus(kwargs['password']),
-                host)
+                host,
+                db_name,
+                kwargs.get('auth_mechanism', 'SCRAM-SHA-1'))
         _connections[db_name] = Client(host)
         db = _connections[db_name][db_name]
     return db
@@ -70,7 +72,7 @@ class ModelMeta(type):
             meta.database_attrs = next((i.database_attrs
                                         for i in super_meta_list
                                         if hasattr(i, 'database_attrs')),
-                                       {})
+                                       getattr(meta, 'database_attrs', {}))
 
             # Get collection or create from model name.
             if not hasattr(meta, 'collection'):
